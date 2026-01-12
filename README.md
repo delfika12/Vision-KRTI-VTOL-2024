@@ -3,7 +3,7 @@
 Repository ini berisi sistem Computer Vision untuk tim VTOL di KRTI 2024. Kita pakai YOLOv5 yang telah dimodifikasi supaya bisa deteksi objek target (payload, basket, dll) dan memberikan informasi posisinya ke sistem navigasi (ROS 1).
 
 ## 1. Tujuan
-Intinya, repo ini dibuat supaya drone bisa:
+Repo ini dibuat supaya drone bisa:
 *   Mendeteksi objek target secara real-time.
 *   Mengetahui posisi objek secara visual (apakah di Kanan Atas, Tengah, Kiri Bawah, dsb).
 *   Mengirim data tersebut ke Flight Controller lewat ROS agar drone bisa melakukan manuver otomatis (tracking atau precision landing).
