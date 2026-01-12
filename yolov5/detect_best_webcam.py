@@ -23,6 +23,10 @@ if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # add ROOT to PATH
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
+# ROS1 Imports
+import rospy
+from std_msgs.msg import String
+
 @smart_inference_mode()
 def run(
     weights=ROOT / "best-KRTI.pt",  # model path
@@ -40,6 +44,10 @@ def run(
     source = str(source)
     save_img = False
     webcam = source.isnumeric()
+
+    # Initialize ROS Node and Publisher
+    rospy.init_node('singlecam_node', anonymous=True)
+    pub = rospy.Publisher('singlecam', String, queue_size=10)
 
     # Pilih device
     device = select_device(device)
@@ -61,6 +69,33 @@ def run(
     # Lakukan pemanasan model
     model.warmup(imgsz=(1 if pt or model.triton else 1, 3, *imgsz))
     seen = 0
+
+    def get_grid_position(x, y, width, height):
+        """Determine the grid position (1-9) based on the coordinates."""
+        step_x = width // 3
+        step_y = height // 3
+        col = x // step_x
+        row = y // step_y
+        return int(row * 3 + col + 1)
+
+    def draw_grid(frame):
+        """Draw grid lines on the frame."""
+        height, width, _ = frame.shape
+        step_x = width // 3
+        step_y = height // 3
+        # Draw vertical lines
+        for i in range(1, 3):
+            cv2.line(frame, (i * step_x, 0), (i * step_x, height), (255, 255, 255), 1)
+        # Draw horizontal lines
+        for i in range(1, 3):
+            cv2.line(frame, (0, i * step_y), (width, i * step_y), (255, 255, 255), 1)
+        return frame
+
+    grid_positions = {
+        1: "Top Left", 2: "Top Center", 3: "Top Right",
+        4: "Middle Left", 5: "Center", 6: "Middle Right",
+        7: "Bottom Left", 8: "Bottom Center", 9: "Bottom Right"
+    }
 
     while True:
         ret, im0 = cap.read()
@@ -99,6 +134,38 @@ def run(
 
             # Tampilkan hasil deteksi
             im0 = annotator.result()
+            im0 = draw_grid(im0)  # Draw grid lines
+
+            if len(det):
+                # Get the last detection (highest confidence/last in list) or iterate if needed
+                # For simplicity in display, we show the position of the last processed object
+                # or we can modify the loop to print for all. 
+                # Let's just use the last one for the main "Position" text or add it to the label?
+                # The user asked to show "di posisi mana objek ditemukan".
+                
+                # We already iterated above. Let's find the position for the last one or all.
+                # Re-calculating center for the last detection to show in large text
+                for *xyxy, conf, cls in reversed(det):
+                    x_center = (xyxy[0] + xyxy[2]) / 2
+                    y_center = (xyxy[1] + xyxy[3]) / 2
+                    grid_pos = get_grid_position(x_center, y_center, im0.shape[1], im0.shape[0])
+                    pos_text = grid_positions.get(grid_pos, "Unknown")
+                    
+                    # Display position text on top of the object or globally
+                    # Global display at the bottom left
+                    cv2.putText(im0, f"Pos: {pos_text}", (10, im0.shape[0] - 40), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    
+                    # Log to console
+                    log_msg = f"Detected {names[int(cls)]} at {pos_text}"
+                    print(log_msg)
+
+                    # Publish to ROS
+                    # Format: "ObjectClass,Position"
+                    ros_msg = f"{names[int(cls)]},{pos_text}"
+                    pub.publish(ros_msg)
+                    
+                    break # Just show for one to avoid text overlap clutter if multiple objects
             elapsed_time = time.time() - start_time  # Hitung waktu yang dibutuhkan
             fps = 1 / elapsed_time if elapsed_time > 0 else 0  # Hitung FPS
             

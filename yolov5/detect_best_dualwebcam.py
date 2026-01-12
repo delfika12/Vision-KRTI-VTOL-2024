@@ -22,6 +22,10 @@ if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # add ROOT to PATH
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
+# ROS1 Imports
+import rospy
+from std_msgs.msg import String
+
 @smart_inference_mode()
 def run(
     weights=ROOT / "best-KRTI.pt",  # model path
@@ -42,29 +46,33 @@ def run(
     source2 = str(source2)
     save_img = False
 
+    # Initialize ROS Node and Publisher
+    rospy.init_node('dualcam_node', anonymous=True)
+    pub = rospy.Publisher('dualcam', String, queue_size=10)
+
     # Define messages for each grid position
     grid_messages1 = {
-        1: "Roll--",
-        2: "Go Forward",
-        3: "Roll++",
-        4: "Roll--",
-        5: "Go Forward",
-        6: "Roll++",
-        7: "Roll--",
-        8: "Go Forward",
-        9: "Roll++"
+        1: "Top Left",
+        2: "Top Center",
+        3: "Top Right",
+        4: "Middle Left",
+        5: "Center",
+        6: "Middle Right",
+        7: "Bottom Left",
+        8: "Bottom Center",
+        9: "Bottom Right"
     }
 
     grid_messages2 = {
-        1: "Roll--",
-        2: "Go Forward",
-        3: "Roll++",
-        4: "Roll--",
-        5: "Drop the payload",
-        6: "Roll++",
-        7: "Roll--",
-        8: "Go Backward",
-        9: "Roll++"
+        1: "Top Left",
+        2: "Top Center",
+        3: "Top Right",
+        4: "Middle Left",
+        5: "Center",
+        6: "Middle Right",
+        7: "Bottom Left",
+        8: "Bottom Center",
+        9: "Bottom Right"
     }
 
     # Load model
@@ -175,7 +183,13 @@ def run(
                     grid_pos = get_grid_position(x_center, y_center, im0_1.shape[1], im0_1.shape[0])
                     message1 = grid_messages1.get(grid_pos, "Detected")
                     object_label1 = names[c] + " detected"  # Update object label with the detected class name
-                    print(f"Webcam 1: Detected {names[c]} with confidence {conf:.2f} at grid position {grid_pos}")
+                    
+                    # Prepare and publish ROS message
+                    # Format: "CameraIndex,ObjectClass,Position"
+                    ros_msg1 = f"0,{names[c]},{message1}"
+                    pub.publish(ros_msg1)
+                    
+                    print(f"Webcam 1: Detected {names[c]} with confidence {conf:.2f} at grid position {grid_pos} ({message1})")
 
             im0_1 = annotator1.result()
             im0_1 = draw_grid(im0_1)
@@ -208,7 +222,13 @@ def run(
                         message2 = grid_messages2.get(grid_pos, "Detected")
                     
                     object_label2 = names[c] + " detected"  # Update object label with the detected class name
-                    print(f"Webcam 2: Detected {names[c]} with confidence {conf:.2f} at grid position {grid_pos}")
+                    
+                    # Prepare and publish ROS message
+                    # Format: "CameraIndex,ObjectClass,Position"
+                    ros_msg2 = f"1,{names[c]},{message2}"
+                    pub.publish(ros_msg2)
+                    
+                    print(f"Webcam 2: Detected {names[c]} with confidence {conf:.2f} at grid position {grid_pos} ({message2})")
 
             im0_2 = annotator2.result()
             im0_2 = draw_grid(im0_2)
